@@ -2,7 +2,7 @@
 
 import logging
 from typing import List
-from .analytics import Analytics, CategorySummary
+from .analytics import Analytics, CategorySummary, TransactionDetail
 
 logger = logging.getLogger(__name__)
 
@@ -157,3 +157,85 @@ class Dashboard:
         print("-" * 40)
         print(f"TOTAL: {stats['total_count']} transactions, "
               f"Total: {self._format_currency(stats['total_amount'])}")
+
+    def display_category_drilldown(self, category: str):
+        """
+        Display detailed transaction list for a specific category.
+
+        Args:
+            category: Category name to drill down into
+        """
+        logger.info(f"Displaying drill-down for category: {category}")
+
+        # Get transactions for this category
+        transactions = self.analytics.get_transactions_by_category(category)
+
+        if not transactions:
+            print(f"\nNo transactions found for category: {category}")
+            return
+
+        # Get category summary
+        summaries = self.analytics.group_by_category()
+        category_summary = next((s for s in summaries if s.category == category), None)
+
+        # Display header
+        print("=" * self.width)
+        print(f"CATEGORY DRILL-DOWN: {category}".center(self.width))
+        print("=" * self.width)
+
+        if category_summary:
+            print(f"Count: {category_summary.count}  |  " +
+                  f"Total: {self._format_currency(category_summary.total)}  |  " +
+                  f"Average: {self._format_currency(category_summary.average)}")
+            print()
+
+        # Display transaction table
+        self._display_transaction_table(transactions)
+
+    def _display_transaction_table(self, transactions: List[TransactionDetail]):
+        """
+        Display formatted table of transaction details.
+
+        Args:
+            transactions: List of TransactionDetail objects
+        """
+        # Column widths
+        date_width = 10
+        desc_width = 40
+        amount_width = 12
+
+        # Header
+        print("-" * self.width)
+        header = (
+            f"{'Date':<{date_width}} | "
+            f"{'Description':<{desc_width}} | "
+            f"{'Amount':>{amount_width}}"
+        )
+        print(header)
+        print("-" * self.width)
+
+        # Data rows
+        total = 0.0
+        for txn in transactions:
+            # Truncate description if too long
+            desc = txn.description
+            if len(desc) > desc_width:
+                desc = desc[:desc_width-3] + "..."
+
+            row = (
+                f"{txn.date:<{date_width}} | "
+                f"{desc:<{desc_width}} | "
+                f"{self._format_currency(txn.amount):>{amount_width}}"
+            )
+            print(row)
+            total += txn.amount
+
+        # Display total
+        print("-" * self.width)
+        total_row = (
+            f"{'TOTAL':<{date_width}} | "
+            f"{'':<{desc_width}} | "
+            f"{self._format_currency(total):>{amount_width}}"
+        )
+        print(total_row)
+        print("=" * self.width)

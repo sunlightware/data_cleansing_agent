@@ -29,6 +29,7 @@ class CategoryLoader:
         - Column headers are category names
         - Rows below contain merchant names
         - Empty cells indicate end of merchant list for that category
+        - 'ignore' column is excluded from categories
 
         Returns:
             List of Category objects
@@ -44,6 +45,11 @@ class CategoryLoader:
         categories = []
 
         for column_name in df.columns:
+            # Skip the 'ignore' column
+            if column_name.lower() == 'ignore':
+                logger.debug(f"Skipping 'ignore' column")
+                continue
+
             # Get all non-null values in this column
             merchants = df[column_name].dropna().tolist()
 
@@ -61,6 +67,46 @@ class CategoryLoader:
 
         logger.info(f"Total categories loaded: {len(categories)}")
         return categories
+
+    def load_ignore_patterns(self) -> List[str]:
+        """
+        Load ignore patterns from the 'ignore' column in category CSV.
+
+        Transactions matching any ignore pattern will be excluded from processing.
+
+        Returns:
+            List of ignore patterns (strings to match in transaction descriptions)
+        """
+        logger.info(f"Loading ignore patterns from: {self.filepath}")
+
+        try:
+            df = pd.read_csv(self.filepath)
+        except Exception as e:
+            logger.error(f"Error reading category file: {e}")
+            raise ValueError(f"Could not read category file {self.filepath}: {e}")
+
+        ignore_patterns = []
+
+        # Check if 'ignore' column exists
+        ignore_col = None
+        for col in df.columns:
+            if col.lower() == 'ignore':
+                ignore_col = col
+                break
+
+        if ignore_col:
+            # Get all non-null values from ignore column
+            patterns = df[ignore_col].dropna().tolist()
+
+            # Remove empty strings and whitespace
+            ignore_patterns = [str(p).strip() for p in patterns if str(p).strip() and str(p).strip().lower() != 'nan']
+
+            logger.info(f"Loaded {len(ignore_patterns)} ignore patterns")
+            logger.debug(f"  Ignore patterns: {ignore_patterns}")
+        else:
+            logger.info("No 'ignore' column found - no patterns to ignore")
+
+        return ignore_patterns
 
     def validate_categories(self, categories: List[Category]) -> bool:
         """

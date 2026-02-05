@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import List
 from .database import Database
+from .models import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,20 @@ class CategorySummary:
             f"CategorySummary(category='{self.category}', count={self.count}, "
             f"total=${self.total:.2f}, avg=${self.average:.2f}, pct={self.percentage:.1f}%)"
         )
+
+
+@dataclass
+class TransactionDetail:
+    """Detailed transaction information for drill-down reports."""
+
+    date: str
+    description: str
+    amount: float
+    nr_1: str
+    nr_2: str
+
+    def __repr__(self):
+        return f"TransactionDetail(date='{self.date}', desc='{self.description}', amount=${self.amount:.2f})"
 
 
 class Analytics:
@@ -181,3 +196,50 @@ class Analytics:
         """
         summaries = self.group_by_category()
         return len([s for s in summaries if s.category != "Uncategorized"])
+
+    def get_transactions_by_category(self, category: str) -> List[TransactionDetail]:
+        """
+        Get detailed transactions for a specific category.
+
+        Args:
+            category: Category name to filter by
+
+        Returns:
+            List of TransactionDetail objects sorted by date
+        """
+        logger.info(f"Retrieving transactions for category: {category}")
+
+        transactions = self.db.get_by_category(category)
+
+        if not transactions:
+            logger.warning(f"No transactions found for category: {category}")
+            return []
+
+        # Convert to TransactionDetail objects
+        details = []
+        for t in transactions:
+            detail = TransactionDetail(
+                date=t.date,
+                description=t.description,
+                amount=t.amount,
+                nr_1=t.nr_1,
+                nr_2=t.nr_2
+            )
+            details.append(detail)
+
+        # Sort by date
+        details.sort(key=lambda x: x.date)
+
+        logger.info(f"Found {len(details)} transactions for category: {category}")
+        return details
+
+    def get_all_categories(self) -> List[str]:
+        """
+        Get list of all unique category names.
+
+        Returns:
+            List of category names sorted alphabetically
+        """
+        summaries = self.group_by_category()
+        categories = [s.category for s in summaries]
+        return sorted(categories)
