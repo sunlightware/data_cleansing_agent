@@ -43,13 +43,13 @@ class Database:
         cursor = self.connection.cursor()
 
         data = [
-            (t.date, t.amount, t.nr_1, t.nr_2, t.description, t.category)
+            (t.date, t.amount, t.description, t.category)
             for t in transactions
         ]
 
         cursor.executemany(
-            "INSERT INTO transactions (date, amount, nr_1, nr_2, description, category) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO transactions (date, amount, description, category) "
+            "VALUES (?, ?, ?, ?)",
             data
         )
 
@@ -90,8 +90,6 @@ class Database:
                 id=row['id'],
                 date=row['date'],
                 amount=row['amount'],
-                nr_1=row['nr_1'] or '',
-                nr_2=row['nr_2'] or '',
                 description=row['description'],
                 category=row['category']
             )
@@ -122,8 +120,6 @@ class Database:
                 id=row['id'],
                 date=row['date'],
                 amount=row['amount'],
-                nr_1=row['nr_1'] or '',
-                nr_2=row['nr_2'] or '',
                 description=row['description'],
                 category=row['category']
             )

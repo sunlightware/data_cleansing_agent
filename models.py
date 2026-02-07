@@ -10,8 +10,6 @@ class Transaction:
 
     date: str
     amount: float
-    nr_1: str
-    nr_2: str
     description: str
     category: str = "Uncategorized"
     id: Optional[int] = None
@@ -26,8 +24,6 @@ class Transaction:
         return {
             'date': self.date,
             'amount': self.amount,
-            'nr_1': self.nr_1,
-            'nr_2': self.nr_2,
             'description': self.description,
             'category': self.category
         }
@@ -62,8 +58,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
     amount REAL NOT NULL,
-    nr_1 TEXT,
-    nr_2 TEXT,
     description TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'Uncategorized'
 );

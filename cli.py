@@ -13,6 +13,7 @@ from .categorizer import TransactionCategorizer
 from .analytics import Analytics
 from .dashboard import Dashboard
 from .transaction_filter import TransactionFilter
+from .budget_loader import BudgetLoader
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +77,17 @@ def cmd_drilldown(args: argparse.Namespace) -> int:
         logger.info("Storing transactions in database...")
         db.insert_transactions(categorized_transactions)
 
+        # Load budgets if provided
+        budgets = {}
+        if hasattr(args, 'budget') and args.budget:
+            logger.info(f"Loading budgets from: {args.budget}")
+            budget_loader = BudgetLoader(args.budget)
+            budgets = budget_loader.load_budgets()
+            budget_loader.validate_budgets(budgets)
+
         # Display drill-down report
         logger.info(f"Generating drill-down report for category: {args.category}")
-        analytics = Analytics(db)
+        analytics = Analytics(db, budgets)
         dashboard = Dashboard(analytics)
         print()  # Blank line before dashboard
         dashboard.display_category_drilldown(args.category)
@@ -152,9 +161,17 @@ def cmd_categorize(args: argparse.Namespace) -> int:
         logger.info("Storing transactions in database...")
         db.insert_transactions(categorized_transactions)
 
+        # Load budgets if provided
+        budgets = {}
+        if hasattr(args, 'budget') and args.budget:
+            logger.info(f"Loading budgets from: {args.budget}")
+            budget_loader = BudgetLoader(args.budget)
+            budgets = budget_loader.load_budgets()
+            budget_loader.validate_budgets(budgets)
+
         # Display dashboard
         logger.info("Generating dashboard...")
-        analytics = Analytics(db)
+        analytics = Analytics(db, budgets)
         dashboard = Dashboard(analytics)
         print()  # Blank line before dashboard
         dashboard.display()
@@ -195,6 +212,9 @@ Examples:
   # Basic usage
   python -m data_cleansing_agent.cli categorize --input ./input --categories ./input/category_list.csv
 
+  # With budget tracking
+  python -m data_cleansing_agent.cli categorize --input ./input --categories ./input/category_list.csv --budget ./input/budget.csv
+
   # With export
   python -m data_cleansing_agent.cli categorize --input ./input --categories ./input/category_list.csv --export summary.csv
 
@@ -234,6 +254,10 @@ Examples:
         "--export", "-e",
         help="Export summary to CSV file (optional)"
     )
+    categorize_parser.add_argument(
+        "--budget", "-b",
+        help="Path to budget.csv file (optional)"
+    )
     categorize_parser.set_defaults(func=cmd_categorize)
 
     # Drilldown command
@@ -255,6 +279,10 @@ Examples:
         "--category",
         required=True,
         help="Category name to drill down into (e.g., 'Groceries', 'Gas')"
+    )
+    drilldown_parser.add_argument(
+        "--budget", "-b",
+        help="Path to budget.csv file (optional)"
     )
     drilldown_parser.set_defaults(func=cmd_drilldown)
 

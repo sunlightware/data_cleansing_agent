@@ -3,7 +3,7 @@
 import pandas as pd
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Optional
 from .database import Database
 from .models import Transaction
 
@@ -16,14 +16,20 @@ class CategorySummary:
 
     category: str
     count: int
-    total: float
+    total: float  # Absolute value of aggregated amount
     average: float
     percentage: float
+    budget: Optional[float] = None
+    deviation: Optional[float] = None
+    raw_total: Optional[float] = None  # Original aggregated amount (with sign)
 
     def __repr__(self):
+        budget_str = f", budget=${self.budget:.2f}" if self.budget is not None else ""
+        deviation_str = f", deviation=${self.deviation:.2f}" if self.deviation is not None else ""
         return (
             f"CategorySummary(category='{self.category}', count={self.count}, "
-            f"total=${self.total:.2f}, avg=${self.average:.2f}, pct={self.percentage:.1f}%)"
+            f"total=${self.total:.2f}, avg=${self.average:.2f}, pct={self.percentage:.1f}%"
+            f"{budget_str}{deviation_str})"
         )
 
 
@@ -34,8 +40,6 @@ class TransactionDetail:
     date: str
     description: str
     amount: float
-    nr_1: str
-    nr_2: str
 
     def __repr__(self):
         return f"TransactionDetail(date='{self.date}', desc='{self.description}', amount=${self.amount:.2f})"
@@ -44,15 +48,17 @@ class TransactionDetail:
 class Analytics:
     """Analyzes transaction data and generates summaries."""
 
-    def __init__(self, database: Database):
+    def __init__(self, database: Database, budgets: Optional[Dict[str, float]] = None):
         """
         Initialize analytics with database.
 
         Args:
             database: Database instance containing transactions
+            budgets: Optional dictionary mapping category names to budget amounts
         """
         self.db = database
-        logger.debug("Analytics initialized")
+        self.budgets = budgets or {}
+        logger.debug(f"Analytics initialized with {len(self.budgets)} budgets")
 
     def group_by_category(self) -> List[CategorySummary]:
         """
@@ -90,25 +96,47 @@ class Analytics:
 
         grouped.columns = ['category', 'count', 'total', 'average']
 
-        # Calculate percentages
+        # Store raw totals and convert to absolute values
+        grouped['raw_total'] = grouped['total']
+        grouped['total'] = grouped['total'].abs()
+
+        # Calculate percentages based on absolute totals
         grand_total = grouped['total'].sum()
-        if grand_total != 0:
+
+        if grand_total > 0:
+            # Each category's percentage = (abs(category_total) / sum(abs(totals))) * 100
             grouped['percentage'] = (grouped['total'] / grand_total * 100)
         else:
             grouped['percentage'] = 0
 
-        # Sort by total descending
+        # Sort by absolute total descending
         grouped = grouped.sort_values('total', ascending=False)
 
         # Convert to CategorySummary objects
         summaries = []
         for _, row in grouped.iterrows():
+            category_name = str(row['category'])
+            total_amount = float(row['total'])  # Absolute value
+            raw_total_amount = float(row['raw_total'])  # Original with sign
+
+            # Get budget and calculate deviation if available
+            budget = self.budgets.get(category_name)
+            deviation = None
+            if budget is not None:
+                # Deviation = budget - absolute(aggregated amount)
+                #   - Positive deviation = under budget (good)
+                #   - Negative deviation = over budget (bad)
+                deviation = budget - total_amount
+
             summary = CategorySummary(
-                category=str(row['category']),
+                category=category_name,
                 count=int(row['count']),
-                total=float(row['total']),
+                total=total_amount,  # Absolute value for display
                 average=float(row['average']),
-                percentage=float(row['percentage'])
+                percentage=float(row['percentage']),
+                budget=budget,
+                deviation=deviation,
+                raw_total=raw_total_amount  # Keep original for reference
             )
             summaries.append(summary)
 
@@ -221,9 +249,7 @@ class Analytics:
             detail = TransactionDetail(
                 date=t.date,
                 description=t.description,
-                amount=t.amount,
-                nr_1=t.nr_1,
-                nr_2=t.nr_2
+                amount=t.amount
             )
             details.append(detail)
 

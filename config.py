@@ -22,7 +22,7 @@ class Config:
 
     # Column definitions for transactions
     transaction_columns: list = field(default_factory=lambda: [
-        "date", "amount", "nr_1", "nr_2", "description"
+        "date", "amount", "description"
     ])
 
     # Default category for unmatched transactions

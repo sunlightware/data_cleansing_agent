@@ -58,35 +58,72 @@ class Dashboard:
         Args:
             summaries: List of CategorySummary objects
         """
-        # Column widths
-        cat_width = 20
-        count_width = 5
-        total_width = 11
-        avg_width = 10
-        pct_width = 10
+        # Check if any summary has budget data
+        has_budgets = any(s.budget is not None for s in summaries)
 
-        # Header
-        print("-" * self.width)
-        header = (
-            f"{'Category':<{cat_width}} | "
-            f"{'Count':>{count_width}} | "
-            f"{'Total':>{total_width}} | "
-            f"{'Average':>{avg_width}} | "
-            f"{'% of Total':>{pct_width}}"
-        )
-        print(header)
-        print("-" * self.width)
+        if has_budgets:
+            # Column widths with budget
+            cat_width = 18
+            count_width = 5
+            total_width = 11
+            budget_width = 11
+            deviation_width = 11
+            pct_width = 10
 
-        # Data rows
-        for summary in summaries:
-            row = (
-                f"{summary.category:<{cat_width}} | "
-                f"{summary.count:>{count_width}} | "
-                f"{self._format_currency(summary.total):>{total_width}} | "
-                f"{self._format_currency(summary.average):>{avg_width}} | "
-                f"{self._format_percentage(summary.percentage):>{pct_width}}"
+            # Header
+            print("-" * self.width)
+            header = (
+                f"{'Category':<{cat_width}} | "
+                f"{'Count':>{count_width}} | "
+                f"{'Total':>{total_width}} | "
+                f"{'Budget':>{budget_width}} | "
+                f"{'Deviation':>{deviation_width}} | "
+                f"{'% of Total':>{pct_width}}"
             )
-            print(row)
+            print(header)
+            print("-" * self.width)
+
+            # Data rows
+            for summary in summaries:
+                budget_str = self._format_currency(summary.budget) if summary.budget is not None else "N/A"
+                deviation_str = self._format_currency(summary.deviation) if summary.deviation is not None else "N/A"
+
+                row = (
+                    f"{summary.category:<{cat_width}} | "
+                    f"{summary.count:>{count_width}} | "
+                    f"{self._format_currency(summary.total):>{total_width}} | "
+                    f"{budget_str:>{budget_width}} | "
+                    f"{deviation_str:>{deviation_width}} | "
+                    f"{self._format_percentage(summary.percentage):>{pct_width}}"
+                )
+                print(row)
+        else:
+            # Column widths without budget (no Average column)
+            cat_width = 25
+            count_width = 7
+            total_width = 13
+            pct_width = 12
+
+            # Header
+            print("-" * self.width)
+            header = (
+                f"{'Category':<{cat_width}} | "
+                f"{'Count':>{count_width}} | "
+                f"{'Total':>{total_width}} | "
+                f"{'% of Total':>{pct_width}}"
+            )
+            print(header)
+            print("-" * self.width)
+
+            # Data rows
+            for summary in summaries:
+                row = (
+                    f"{summary.category:<{cat_width}} | "
+                    f"{summary.count:>{count_width}} | "
+                    f"{self._format_currency(summary.total):>{total_width}} | "
+                    f"{self._format_percentage(summary.percentage):>{pct_width}}"
+                )
+                print(row)
 
         print("-" * self.width)
 
@@ -99,22 +136,47 @@ class Dashboard:
         """
         total_count = sum(s.count for s in summaries)
         total_amount = sum(s.total for s in summaries)
-        avg_amount = total_amount / total_count if total_count > 0 else 0
 
-        # Column widths
-        cat_width = 20
-        count_width = 5
-        total_width = 11
-        avg_width = 10
-        pct_width = 10
+        # Calculate net percentage (sum of all percentages including negative offsets)
+        total_percentage = sum(s.percentage for s in summaries)
 
-        row = (
-            f"{'TOTAL':<{cat_width}} | "
-            f"{total_count:>{count_width}} | "
-            f"{self._format_currency(total_amount):>{total_width}} | "
-            f"{self._format_currency(avg_amount):>{avg_width}} | "
-            f"{'100.0%':>{pct_width}}"
-        )
+        # Check if any summary has budget data
+        has_budgets = any(s.budget is not None for s in summaries)
+
+        if has_budgets:
+            total_budget = sum(s.budget for s in summaries if s.budget is not None)
+            total_deviation = sum(s.deviation for s in summaries if s.deviation is not None)
+
+            # Column widths with budget
+            cat_width = 18
+            count_width = 5
+            total_width = 11
+            budget_width = 11
+            deviation_width = 11
+            pct_width = 10
+
+            row = (
+                f"{'TOTAL':<{cat_width}} | "
+                f"{total_count:>{count_width}} | "
+                f"{self._format_currency(total_amount):>{total_width}} | "
+                f"{self._format_currency(total_budget):>{budget_width}} | "
+                f"{self._format_currency(total_deviation):>{deviation_width}} | "
+                f"{self._format_percentage(total_percentage):>{pct_width}}"
+            )
+        else:
+            # Column widths without budget
+            cat_width = 25
+            count_width = 7
+            total_width = 13
+            pct_width = 12
+
+            row = (
+                f"{'TOTAL':<{cat_width}} | "
+                f"{total_count:>{count_width}} | "
+                f"{self._format_currency(total_amount):>{total_width}} | "
+                f"{self._format_percentage(total_percentage):>{pct_width}}"
+            )
+
         print(row)
         print("=" * self.width)
 

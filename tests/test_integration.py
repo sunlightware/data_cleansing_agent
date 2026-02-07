@@ -16,6 +16,7 @@ from data_cleansing_agent.config import Config
 from data_cleansing_agent.transaction_filter import TransactionFilter
 from data_cleansing_agent.models import Transaction
 from data_cleansing_agent.dashboard import Dashboard
+from data_cleansing_agent.budget_loader import BudgetLoader
 
 
 class TestIntegration:
@@ -23,10 +24,10 @@ class TestIntegration:
 
     def test_end_to_end_pipeline(self):
         """Test complete pipeline from CSV to dashboard."""
-        # Setup paths
-        fixtures_dir = Path(__file__).parent / "fixtures"
-        transactions_csv = fixtures_dir / "sample_transactions.csv"
-        categories_csv = fixtures_dir / "category_list.csv"
+        # Setup paths - use inputs directory structure
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        transactions_csv = inputs_dir / "transactions" / "sample_transactions.csv"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
 
         # Create config
         config = Config()
@@ -43,7 +44,7 @@ class TestIntegration:
         # Step 2: Load categories
         category_loader = CategoryLoader(str(categories_csv))
         categories = category_loader.load_categories()
-        assert len(categories) == 10, "Should load 10 categories"
+        assert len(categories) == 10, "Should load 10 categories (ignore column excluded)"
 
         # Verify category names
         category_names = [c.name for c in categories]
@@ -94,8 +95,8 @@ class TestIntegration:
 
     def test_partial_matching(self):
         """Test that partial matching works correctly."""
-        fixtures_dir = Path(__file__).parent / "fixtures"
-        categories_csv = fixtures_dir / "category_list.csv"
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
 
         # Load categories
         category_loader = CategoryLoader(str(categories_csv))
@@ -132,8 +133,8 @@ class TestIntegration:
 
     def test_ignore_patterns(self):
         """Test that ignore patterns filter out transactions correctly."""
-        fixtures_dir = Path(__file__).parent / "fixtures"
-        categories_csv = fixtures_dir / "category_list.csv"
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
 
         # Load ignore patterns
         category_loader = CategoryLoader(str(categories_csv))
@@ -146,11 +147,11 @@ class TestIntegration:
 
         # Create test transactions
         transactions = [
-            Transaction("2024-01-01", 100.0, "001", "ABC", "GROCERY STORE", "Uncategorized"),
-            Transaction("2024-01-02", 200.0, "002", "DEF", "ONLINE PAYMENT TO BANK", "Uncategorized"),
-            Transaction("2024-01-03", 150.0, "003", "GHI", "ONLINE ACH PAYMENT FROM SAVINGS", "Uncategorized"),
-            Transaction("2024-01-04", 50.0, "004", "JKL", "COFFEE SHOP", "Uncategorized"),
-            Transaction("2024-01-05", 75.0, "005", "MNO", "RETAIL PURCHASE", "Uncategorized"),
+            Transaction("2024-01-01", 100.0, "GROCERY STORE", "Uncategorized"),
+            Transaction("2024-01-02", 200.0, "ONLINE PAYMENT TO BANK", "Uncategorized"),
+            Transaction("2024-01-03", 150.0, "ONLINE ACH PAYMENT FROM SAVINGS", "Uncategorized"),
+            Transaction("2024-01-04", 50.0, "COFFEE SHOP", "Uncategorized"),
+            Transaction("2024-01-05", 75.0, "RETAIL PURCHASE", "Uncategorized"),
         ]
 
         # Filter transactions
@@ -182,9 +183,9 @@ class TestIntegration:
 
     def test_category_drilldown(self):
         """Test getting detailed transactions for a specific category."""
-        fixtures_dir = Path(__file__).parent / "fixtures"
-        transactions_csv = fixtures_dir / "sample_transactions.csv"
-        categories_csv = fixtures_dir / "category_list.csv"
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        transactions_csv = inputs_dir / "transactions" / "sample_transactions.csv"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
 
         # Create config
         config = Config()
@@ -228,9 +229,9 @@ class TestIntegration:
 
     def test_get_all_categories(self):
         """Test getting list of all categories."""
-        fixtures_dir = Path(__file__).parent / "fixtures"
-        transactions_csv = fixtures_dir / "sample_transactions.csv"
-        categories_csv = fixtures_dir / "category_list.csv"
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        transactions_csv = inputs_dir / "transactions" / "sample_transactions.csv"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
 
         config = Config()
 
@@ -268,6 +269,123 @@ class TestIntegration:
         transactions = analytics.get_transactions_by_category("NonExistent")
 
         assert transactions == [], "Should return empty list for non-existent category"
+
+        db.close()
+
+    def test_budget_loading(self):
+        """Test loading budgets from CSV file."""
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        budget_csv = inputs_dir / "budget" / "budget.csv"
+
+        # Load budgets
+        budget_loader = BudgetLoader(str(budget_csv))
+        budgets = budget_loader.load_budgets()
+
+        # Should have budgets loaded
+        assert len(budgets) > 0, "Should load budgets"
+        assert "Groceries" in budgets
+        assert "Restaurants" in budgets
+
+        # Budgets should be float values
+        assert isinstance(budgets["Groceries"], float)
+        assert budgets["Groceries"] > 0
+
+    def test_budget_with_analytics(self):
+        """Test analytics with budget tracking."""
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        transactions_csv = inputs_dir / "transactions" / "sample_transactions.csv"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
+        budget_csv = inputs_dir / "budget" / "budget.csv"
+
+        config = Config()
+
+        # Load transactions
+        csv_loader = CSVLoader(config.transaction_columns)
+        df = csv_loader.load_file(str(transactions_csv))
+        transactions = csv_loader.to_transactions(df)
+
+        # Load categories
+        category_loader = CategoryLoader(str(categories_csv))
+        categories = category_loader.load_categories()
+
+        # Categorize
+        categorizer = TransactionCategorizer(categories, "Uncategorized")
+        categorized_transactions = categorizer.categorize_batch(transactions)
+
+        # Store in database
+        db = Database(":memory:")
+        db.insert_transactions(categorized_transactions)
+
+        # Load budgets
+        budget_loader = BudgetLoader(str(budget_csv))
+        budgets = budget_loader.load_budgets()
+
+        # Create analytics with budgets
+        analytics = Analytics(db, budgets)
+        summaries = analytics.group_by_category()
+
+        # Check that summaries have budget and deviation
+        groceries_summary = next((s for s in summaries if s.category == "Groceries"), None)
+        assert groceries_summary is not None, "Should have Groceries summary"
+        assert groceries_summary.budget is not None, "Should have budget"
+        assert groceries_summary.deviation is not None, "Should have deviation"
+
+        # Deviation should be budget - abs(aggregated_total)
+        # The total field contains the absolute value after aggregation
+        # Positive = under budget, Negative = over budget
+        expected_deviation = groceries_summary.budget - groceries_summary.total
+        assert abs(groceries_summary.deviation - expected_deviation) < 0.01, "Deviation calculation should be correct"
+
+        # Verify that total is absolute (positive)
+        assert groceries_summary.total >= 0, "Total should be absolute value (positive)"
+
+        db.close()
+
+    def test_budget_validation(self):
+        """Test budget validation."""
+        budget_loader = BudgetLoader()
+
+        # Valid budgets
+        valid_budgets = {"Groceries": 1500.0, "Gas": 300.0}
+        assert budget_loader.validate_budgets(valid_budgets) == True
+
+        # Empty budgets
+        empty_budgets = {}
+        assert budget_loader.validate_budgets(empty_budgets) == True
+
+        # Negative budgets (invalid)
+        invalid_budgets = {"Groceries": -100.0}
+        assert budget_loader.validate_budgets(invalid_budgets) == False
+
+    def test_no_budget_file(self):
+        """Test analytics without budget file."""
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        transactions_csv = inputs_dir / "transactions" / "sample_transactions.csv"
+        categories_csv = inputs_dir / "category" / "category_list.csv"
+
+        config = Config()
+
+        csv_loader = CSVLoader(config.transaction_columns)
+        df = csv_loader.load_file(str(transactions_csv))
+        transactions = csv_loader.to_transactions(df)
+
+        category_loader = CategoryLoader(str(categories_csv))
+        categories = category_loader.load_categories()
+
+        categorizer = TransactionCategorizer(categories, "Uncategorized")
+        categorized_transactions = categorizer.categorize_batch(transactions)
+
+        db = Database(":memory:")
+        db.insert_transactions(categorized_transactions)
+
+        # Create analytics without budgets
+        analytics = Analytics(db)
+        summaries = analytics.group_by_category()
+
+        # Check that summaries don't have budget or deviation
+        for summary in summaries:
+            assert summary.budget is None, "Should not have budget"
+            assert summary.deviation is None, "Should not have deviation"
 
         db.close()
 
