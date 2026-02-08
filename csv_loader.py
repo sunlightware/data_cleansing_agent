@@ -26,6 +26,11 @@ class CSVLoader:
         """
         Load a single CSV file with headers and extract required columns.
 
+        Supports multiple column name patterns:
+        - Date: 'date', 'post date', 'transaction date'
+        - Amount: 'amount', 'credit', 'debit' (credit/debit are combined)
+        - Description: 'description', 'desc'
+
         Args:
             filepath: Path to CSV file with headers
 
@@ -41,14 +46,50 @@ class CSVLoader:
 
             # Find required columns (case-insensitive)
             column_mapping = {}
+            credit_col = None
+            debit_col = None
+
             for col in df.columns:
                 col_lower = str(col).lower().strip()
-                if 'date' in col_lower:
-                    column_mapping['date'] = col
-                elif 'amount' in col_lower:
-                    column_mapping['amount'] = col
-                elif 'description' in col_lower or 'desc' in col_lower:
-                    column_mapping['description'] = col
+
+                # Match date columns (date, post date, transaction date)
+                if 'date' not in column_mapping:
+                    if col_lower == 'date' or col_lower == 'post date' or col_lower == 'transaction date':
+                        column_mapping['date'] = col
+                    elif 'date' in col_lower and 'amount' not in col_lower:
+                        column_mapping['date'] = col
+
+                # Match amount columns (amount, credit, or debit)
+                if 'amount' not in column_mapping:
+                    if col_lower == 'amount':
+                        column_mapping['amount'] = col
+                    elif col_lower == 'credit':
+                        credit_col = col
+                    elif col_lower == 'debit':
+                        debit_col = col
+
+                # Match description columns
+                if 'description' not in column_mapping:
+                    if 'description' in col_lower or col_lower == 'desc':
+                        column_mapping['description'] = col
+
+            # If no amount column but have credit/debit, combine them
+            if 'amount' not in column_mapping and (credit_col or debit_col):
+                logger.debug(f"Combining credit/debit columns: credit='{credit_col}', debit='{debit_col}'")
+                # Create a combined amount column
+                amount_series = pd.Series(0.0, index=df.index)
+
+                if credit_col:
+                    credit_values = pd.to_numeric(df[credit_col], errors='coerce').fillna(0)
+                    amount_series += credit_values
+
+                if debit_col:
+                    debit_values = pd.to_numeric(df[debit_col], errors='coerce').fillna(0)
+                    # Debit is typically negative
+                    amount_series -= debit_values
+
+                df['_combined_amount'] = amount_series
+                column_mapping['amount'] = '_combined_amount'
 
             # Verify required columns exist
             required = ['date', 'amount', 'description']
