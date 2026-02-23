@@ -255,7 +255,7 @@ The system automatically detects these column patterns:
 
 All other columns are ignored.
 
-## Need Help?
+## Need Help??
 
 - Read the full [README.md](README.md)
 - Check sample data in `inputs/`
